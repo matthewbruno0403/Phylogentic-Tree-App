@@ -3,16 +3,15 @@ from tkinter import ttk
 
 class Node:
 
-    def __init__(self, name, unique_id=None):
+    def __init__(self, name):
         self.name = name
-        self.unique_id = unique_id if unique_id else name # Use unique_id if provided
         self.children = [] # Stores child nodes
         self.parent = None # Stores parent node
         
     def add_child(self, child):
         #Prevent duplicate children
-        if any(existing_child.name == child.name for existing_child in self.children):
-            raise ValueError((f"Child with name '{child.bane}' already exists under 'self.name'."))
+        if any(existing_child.name.lower() == child.name.lower() for existing_child in self.children):
+            raise ValueError((f"Child with name '{child.name}' already exists under 'self.name'."))
         child.parent = self # Set the parent of the child
         self.children.append(child) # Add child to the current node's children
 
@@ -29,7 +28,7 @@ class Node:
         self.parent = parent # Set the new parent as the current node's parent
     
     def __repr__(self):
-        return f"Node(name='{self.name}', unique_id='{self.unique_id}')"
+        return f"Node(name='{self.name}')"
     
     def display_tree(self, level=0):
         indent = " " * level # Indentation based on tree level
@@ -125,12 +124,179 @@ class PhylogenyApp:
             self.display_area.insert(tk.END, "\nEdit Mode deactivated.\n")
             
     def add_node(self):
-        #Placeholder for adding a node
-        self.display_area.insert(tk.END, "\nAdd Node feature coming soon.\n")
+        #Add a new node to the tree as a child and optionally a parent of one or multiple children
+        if not self.edit_mode:
+            self.display_area.insert(tk.END, "Edit Mode must be enabled to add a node.\n")
+            return
+    
+        # Popup window for adding a node
+        self.add_window = tk.Toplevel(self.root)
+        self.add_window.title("Add Node")
+        
+        # Node Name
+        tk.Label(self.add_window, text = "Node Name:").grid(row = 1, column = 0, padx = 5, pady = 5)
+        self.node_name_entry = tk.Entry(self.add_window, width = 30)
+        self.node_name_entry.grid(row = 1, column = 1, padx = 5, pady = 5)
+    
+        # Parent Node selection (Optional, if not creating a root)
+        tk.Label(self.add_window, text = "Parent Node:").grid(row = 0, column = 0, padx = 5, pady = 5)
+        self.parent_entry = tk.Entry(self.add_window, width = 30)
+        self.parent_entry.grid(row = 0, column = 1, padx = 5, pady = 5)
+        
+        # Checkbox for new root
+        self.new_root_var = tk.BooleanVar()
+        self.new_root_checkbox = tk.Checkbutton(
+            self.add_window, text="Make this a new root node", variable = self.new_root_var
+        )
+        self.new_root_checkbox.grid(row = 3, column = 0, columnspan = 2, pady = 5)
+        
+        # Existing children nodes to reassign
+        tk.Label(self.add_window, text = "Existing Children Node (comma-separated):").grid(row = 2, column = 0, padx = 5, pady = 5)
+        self.child_entry = tk.Entry(self.add_window, width = 30)
+        self.child_entry.grid(row = 2, column = 1, padx = 5, pady = 5)
+        
+        # Add Node Button
+        add_button = tk.Button(self.add_window, text = "Add", command = self.confirm_add_node)
+        add_button.grid(row = 4, column = 0, columnspan = 2, pady = 10)
+        
+    def confirm_add_node(self):
+        # Confirm and add the node to the tree
+        parent_name = self.parent_entry.get().strip()
+        node_name = self.node_name_entry.get().strip()
+        existing_children_names = self.child_entry.get().strip()
+        
+        # Validate inputs for a new root node
+        if self.new_root_var.get():
+            if not node_name:
+                self.display_area.insert(tk.END, "Node Name is required for the new root node.\n")
+                self.add_window.destroy()
+                return
+            
+            # Check if the new root name matches the current root
+            if node_name.lower() == self.tree_root.name.lower():
+                self.display_area.insert(tk.END, f"'{node_name}' is already the root of the tree.\n")
+                self.add_window.destroy()
+                return
+            
+            # Create the new root node
+            new_root = Node(name = node_name)
+            
+            # Reassign all current root children to the new root node
+            new_root.add_child(self.tree_root)
+            
+            # Update the root reference
+            self.tree_root = new_root
+            self.display_area.insert(tk.END, f"New root node '{node_name}' added.\n")
+            self.add_window.destroy()
+            return
+        
+        # Validate inputs for normal node addition
+        if not node_name:
+            self.display_area.insert(tk.END, "Node Name is required. \n")
+            self.add_window.destroy()
+            return
+        
+        if not parent_name:
+            self.display_area.insert(tk.END, "Parent Node is required unless creating a new root.\n")
+            self.add_window.destroy()
+            return
+        
+        # Find the parent node
+        parent_node = self.find_node(self.tree_root, parent_name)
+        if not parent_node:
+            self.display_area.insert(tk.END, f"Parent Node '{parent_name} not found.\n")
+            self.add_window.destroy()
+            return
+        
+        #if existing_child not in locals() or not existing_child:
+        #    self.display_area.insert(tk.END, f"Child Node '{child_name}' not found.\n")
+        #    return
+        
+        # Check for duplicate child
+        if any(child.name.lower() == node_name.lower() for child in parent_node.children):
+            self.display_area.insert(tk.END, f"A node with the name '{node_name}' already exists under '{parent_name}'.\n")
+            self.add_window.destroy()
+            return
+        
+        # Create the new node and add it as a child of the parent
+        new_node = Node(name = node_name)
+        parent_node.add_child
+        
+        # Reassign multiple children nodes, if provided
+        reassigned_children = []
+        if existing_children_names:
+            # Split and clean the inpit
+            child_names = list(filter(None, (name.strip() for name in existing_children_names.split(',') if name.strip())))
+            for child_name in child_names:              
+                # Find the child node
+                existing_child = self.find_node(self.tree_root, child_name)
+                if not existing_child:
+                    self.display_area.insert(tk.END, f"Child Node '{child_name}' not found.\n")
+                    continue
+    
+                # Remove the existing child from its current parent
+                if existing_child.parent:
+                    existing_child.parent.children.remove(existing_child)
+            
+                # Attach the existing child to the new node
+                new_node.add_child(existing_child)
+                reassigned_children.append(child_name)
+        
+        # Add the new node as a child of the parent node
+        try:
+            parent_node.add_child(new_node)
+            self.display_area.insert(tk.END, f"Node '{node_name}' added under '{parent_name}'.\n")
+        except ValueError as e:
+            self.display_area.insert(tk.END, f"Error: {e}\n")
+        
+        if reassigned_children:
+            self.display_area.insert(tk.END, f"Node '{node_name}' is now the parent of: {', '.join(reassigned_children)}.\n")
+        
+        # Close the popup
+        self.add_window.destroy()
     
     def edit_node(self):
-        #Placeholder for editing a node
-        self.display_area.insert(tk.END, "\nEdit Node feature coming soon.\n")
+        # Ensure edit mode is enabled
+        if not self.edit_mode:
+            self.display_area.insert(tk.END, "Edit Mode must be enabled to edit a node.\n")
+            return
+        
+        # Popup for editing a node
+        self.edit_window = tk.Toplevel(self.root)
+        self.edit_window.title("Edit Node")
+        
+        # Node to edit
+        tk.Label(self.edit_window, text = "Node to Edit:").grid(row = 0, column = 0, padx = 5, pady = 5)
+        self.node_to_edit_entry = tk.Entry(self.edit_window, width = 30)
+        self.node_to_edit_entry.grid(row = 0, column = 1, padx = 5, pady = 5)
+        
+        # New name
+        tk.Label(self.edit_window, text = "New Name:").grid(row = 1, column = 1, padx = 5, pady = 5)
+        self.new_name_entry = tk.Entry(self.edit_window, width = 30)
+        self.new_name_entry.grid(row = 1, column = 1, padx = 5, pady = 5)
+        
+        # New parent (optional for moving nodes)
+        tk.Label(self.edit_window, text = "New Parent (optional):").grid(row = 2, column = 0, padx = 5, pady = 5)
+        self.new_parent_entry = tk.Entry(self.edit_window, width = 30)
+        self.new_parent_entry.grid(row = 2, column = 1, padx = 5, pady = 5)
+        
+        # Confirm Edit Button
+        tk.Button(self.edit_window, text = "Edit", command = self.confirm_edit_node).grid(row = 3, column = 0, columnspan = 2, pady = 10)
+        
+    def confirm_edit_node(self):
+        node_to_edit = self.node_to_edit_entry.get().strip()
+        new_name = self.new_name_entry.get().strip()
+        new_parent_name = self.new_parent_entry.get().strip()
+        
+        # Validate input
+        if not node_to_edit:
+            self.display_area.insert(tk.End, "Node to edit is required.\n")
+            return
+        
+        # Find the node to edit
+        node = self.find_node(self.tree_root, node_to_edit)
+        if not node:
+            self.display
         
     def delete_node(self):
         #Placeholder for deleting a node
@@ -207,9 +373,9 @@ if __name__ == "__main__":
     genus_tyrannosaurus = Node("Tyrannosaurus")
     genus_Tarbosaurus = Node ("Tarbosaurus")
     genus_albertosaurus = Node("Albertosaurus")
-    velociraptor_mongoliensis = Node("Velociraptor mongoliensis", unique_id="Velociraptor_mongoliensis")
+    velociraptor_mongoliensis = Node("Velociraptor mongoliensis")
     velociraptor_osmolskae = Node("Velociraptor osmolskae")
-    psittacosaurus_mongoliensis = Node("Psittacosaurus mongoliensis", unique_id="Psittacosaurus_mongoliensis")
+    psittacosaurus_mongoliensis = Node("Psittacosaurus mongoliensis")
     species_rex = Node("Tyrannosaurus rex")
     tarbosaurus_bataar = Node("Tarbosaurus Bataar")
     species_mcraeensis = Node("Tyrannosaurus mcraeensis")
